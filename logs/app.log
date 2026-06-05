@@ -1,0 +1,3 @@
+[2026-06-02 21:16:12,426: INFO: networksecurity: exception: this is a test]
+[2026-06-02 21:17:46,346: INFO: networksecurity: exception: this is a test]
+[2026-06-02 21:17:46,346: ERROR: networksecurity: exception: Error occured in python script name [D:\Projects\RAG_Systems\NetworkSecurity\networksecurity\exceptions\exception.py] line number [27] error message [division by zero]]
