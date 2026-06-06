@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, pickle
 import yaml
 from networksecurity import logger
 import json
@@ -8,6 +8,7 @@ from box import ConfigBox
 from pathlib import Path
 from typing import Any
 from networksecurity.exceptions.exception import NetworkSecurityException
+import numpy as np
 
 # @ensure_annotations
 def read_yaml(path_to_yaml: Path) -> ConfigBox:
@@ -139,4 +140,30 @@ def load_bin(path: Path):
     data = joblib.load(path)
     logger.info(f"binary file loaded from {path}")
     return data
+
+
+
+def save_numpy_array_data(file_path: str, array: np.array):
+    """
+    Save numpy array data to file
+    file_path: str location of file to save
+    array: np.array data to save
+    """
+    try:
+        dir_path = os.path.dirname(file_path)
+        os.makedirs(dir_path, exist_ok=True)
+        with open(file_path, "wb") as file_obj:
+            np.save(file_obj, array)
+    except Exception as e:
+        raise NetworkSecurityException(e, sys) from e
     
+def save_object(file_path: str, obj: object) -> None:
+    try:
+        logger.info("Entered the save_object method of MainUtils class")
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as file_obj:
+            pickle.dump(obj, file_obj)
+            logger.info("Exited the save_object method of MainUtils class")
+    except Exception as e:
+        raise NetworkSecurityException(e, sys) from e
+
