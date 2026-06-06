@@ -37,6 +37,9 @@ class DataIngestion:
             # Cleaning logic: handle MongoDB artifacts and nulls
             if "_id" in df.columns:
                 df = df.drop(columns=["_id"], axis=1)
+            
+            if "id" in df.columns:
+                df = df.drop(columns=["id"], axis=1)
 
             df.replace({"na": np.nan}, inplace=True)
 

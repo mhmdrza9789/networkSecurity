@@ -1,0 +1,184 @@
+from networksecurity.entity.artifact_entity import *
+from networksecurity.entity.config_entity import DataValidationConfig
+from networksecurity.exceptions.exception import NetworkSecurityException
+from networksecurity.utils.main_utils import *
+from networksecurity import logger
+from networksecurity.constant.training_pipeline import SCHEMA_FILE_PATH
+from scipy.stats import ks_2samp
+import pandas as pd
+import numpy as np
+import os, sys
+from pathlib import Path
+
+class DataValidation:
+    def __init__(
+        self,
+        data_ingestion_artifact: DataIngestionArtifact,
+        data_validation_config: DataValidationConfig,
+    ):
+        try:
+            self.data_ingestion_artifact = data_ingestion_artifact
+            self.data_validation_config = data_validation_config
+            self.schema_config = read_yaml(Path(SCHEMA_FILE_PATH))
+
+        except Exception as e:
+            raise NetworkSecurityException(e, sys)
+
+    @staticmethod
+    def read_data(filepath: str) -> pd.DataFrame:
+        try:
+            return pd.read_csv(filepath)
+        except Exception as e:
+            raise NetworkSecurityException(e, sys)
+
+    def validate_number_of_columns(self, dataframe: pd.DataFrame) -> bool:
+        try:
+            schema_columns = list(self.schema_config.columns.keys())
+            dataframe_columns = list(dataframe.columns)
+
+            logger.info(f"Schema columns count: {len(schema_columns)}")
+            logger.info(f"Dataframe columns count: {len(dataframe_columns)}")
+
+            if len(schema_columns) != len(dataframe_columns):
+                logger.warning("Column count mismatch.")
+                return False
+
+            missing_columns = set(schema_columns) - set(dataframe_columns)
+            extra_columns = set(dataframe_columns) - set(schema_columns)
+
+            if missing_columns:
+                logger.warning(f"Missing columns: {missing_columns}")
+                return False
+
+            if extra_columns:
+                logger.warning(f"Extra columns: {extra_columns}")
+                return False
+
+            logger.info("Column validation successful.")
+            return True
+
+        except Exception as e:
+            raise NetworkSecurityException(e, sys)
+        
+    def detect_dataset_drift(self, base_df: pd.DataFrame, current_df: pd.DataFrame, threshold=0.05) -> bool:
+        try:
+            status = True
+            report = {}
+            
+            for column in base_df.columns:
+                d1 = base_df[column]
+                d2 = current_df[column]
+                
+                is_sample_dist = ks_2samp(d1, d2)
+                
+                if threshold <= is_sample_dist.pvalue:
+                    is_found = False # No drift
+                else:
+                    is_found = True # Drift detected
+                    status = False # If any column has drift, overall status is False
+                
+                report.update({
+                    column: {
+                        "p_value": float(is_sample_dist.pvalue),
+                        "drift_status": is_found
+                    }
+                })
+
+            drift_report_file_path = self.data_validation_config.drift_report_file_path
+            
+
+            dir_path = os.path.dirname(drift_report_file_path)
+            os.makedirs(dir_path, exist_ok=True)
+            
+            write_yaml_file(file_path=drift_report_file_path, content=report)
+            
+            logger.info(f"Drift report saved at: {drift_report_file_path}")
+            return status
+
+        except Exception as e:
+            raise NetworkSecurityException(e, sys)
+        
+    
+    def initiate_data_validation(self) -> DataValidationArtifact:
+        try:
+            train_file_path = self.data_ingestion_artifact.trained_file_path
+            test_file_path = self.data_ingestion_artifact.test_file_path
+
+            train_dataframe = DataValidation.read_data(train_file_path)
+            test_dataframe = DataValidation.read_data(test_file_path)
+
+            error_messages = []
+
+            # -----------------------------
+            # Validate Train Columns
+            # -----------------------------
+            status = self.validate_number_of_columns(dataframe=train_dataframe)
+            if not status:
+                error_messages.append(
+                    "Train dataframe does not contain all required columns."
+                )
+
+            # -----------------------------
+            # Validate Test Columns
+            # -----------------------------
+            status = self.validate_number_of_columns(dataframe=test_dataframe)
+            if not status:
+                error_messages.append(
+                    "Test dataframe does not contain all required columns."
+                )
+
+            valid_train_file_path = self.data_validation_config.valid_train_file_path
+            valid_test_file_path = self.data_validation_config.valid_test_file_path
+            invalid_train_file_path = self.data_validation_config.invalid_train_file_path
+            invalid_test_file_path = self.data_validation_config.invalid_test_file_path
+
+            if error_messages:
+                logger.error("\n".join(error_messages))
+                raise Exception("\n".join(error_messages))
+
+            # -----------------------------
+            # Detect Data Drift
+            # -----------------------------
+            drift_status = self.detect_dataset_drift(
+                base_df=train_dataframe,
+                current_df=test_dataframe
+            )
+
+            if drift_status:
+                logger.info("No data drift detected.")
+            else:
+                logger.warning("Data drift detected between train and test datasets.")
+
+            # -----------------------------
+            # Final Validation Status
+            # -----------------------------
+            validation_status = drift_status
+
+            if validation_status:
+                logger.info("Saving validated train and test files.")
+
+                os.makedirs(os.path.dirname(valid_train_file_path), exist_ok=True)
+                os.makedirs(os.path.dirname(valid_test_file_path), exist_ok=True)
+
+                train_dataframe.to_csv(
+                    valid_train_file_path, index=False, header=True
+                )
+
+                test_dataframe.to_csv(
+                    valid_test_file_path, index=False, header=True
+                )
+
+            logger.info("Data validation completed.")
+
+            return DataValidationArtifact(
+                validation_status=validation_status,
+                validation_train_file_path=valid_train_file_path,
+                validation_test_file_path=valid_test_file_path,
+                invalid_train_file_path=None,
+                invalid_test_file_path=None,
+                draft_report_file_path=self.data_validation_config.drift_report_file_path,
+            )
+
+        except Exception as e:
+            raise NetworkSecurityException(e, sys)
+
