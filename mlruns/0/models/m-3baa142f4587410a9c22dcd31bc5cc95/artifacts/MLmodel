@@ -1,0 +1,23 @@
+artifact_path: file:D:/Projects/RAG_Systems/NetworkSecurity/mlruns/0/models/m-3baa142f4587410a9c22dcd31bc5cc95/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.7
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.9.0
+    skops_trusted_types: null
+mlflow_version: 3.13.0
+model_id: m-3baa142f4587410a9c22dcd31bc5cc95
+model_size_bytes: 7870733
+model_uuid: m-3baa142f4587410a9c22dcd31bc5cc95
+prompts: null
+run_id: 8d36298b57e54412bb5c8c7eb86544ed
+utc_time_created: '2026-06-07 04:59:44.881304'
